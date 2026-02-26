@@ -1,0 +1,22 @@
+# 系统文件
+.clawdbot/
+.openclaw/
+node_modules/
+
+# 日志
+logs/
+*.log
+
+# 环境
+.env
+.env.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
