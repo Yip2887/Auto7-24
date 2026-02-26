@@ -1,50 +1,55 @@
-# Monitor Script - Ralph Loop V2
+# Monitor Script - Ralph Loop V2 (Windows版本)
 # 每10分钟运行一次，监控所有 Agent 状态
 
 $workspace = "F:\openclaw-workspace"
-$completePath = "F:\openclaw-workspace\complete"
 $stateFile = "$workspace\.clawdbot\active-tasks.json"
+
+Write-Host "========================================" -ForegroundColor Cyan
+Write-Host "  AI Agent Swarm - 监控面板" -ForegroundColor Cyan
+Write-Host "========================================" -ForegroundColor Cyan
+Write-Host ""
 
 # 检查是否有任务
 if (-not (Test-Path $stateFile)) {
-    Write-Host "没有活动任务"
+    Write-Host "没有活动任务" -ForegroundColor Yellow
     exit 0
 }
 
 $tasks = Get-Content $stateFile | ConvertFrom-Json
 
+$runningCount = 0
+$doneCount = 0
+
 foreach ($task in $tasks) {
-    if ($task.status -eq "done") { continue }
-
-    Write-Host "检查任务: $($task.id) - $($task.agent)"
-
-    # 1. 检查 tmux 会话是否存活
-    $sessionAlive = tmux has-session -t $task.tmuxSession 2>$null
-    if ($sessionAlive -ne 0) {
-        Write-Host "  [!] tmux 会话已结束"
-        
-        # 2. 检查是否有 PR
-        if ($task.prNumber) {
-            # 3. 检查 CI 状态
-            Write-Host "  [*] 检查 CI 状态..."
-            # gh pr checks $task.prNumber
-            
-            # 4. 检查 AI 评审
-            Write-Host "  [*] 检查 AI 评审..."
-            
-            # 5. 如果全部通过，标记完成并移动到 complete
-            $ciPassed = $true  # 替换为实际检查
-            $reviewsPassed = $true  # 替换为实际检查
-            
-            if ($ciPassed -and $reviewsPassed) {
-                Write-Host "  [✓] 任务完成，移动到 complete"
-                $task.status = "done"
-                $task.completedTime = (Get-Date).ToString("o")
-                # 可以选择移动文件到 complete 目录
-            }
+    if ($task.status -eq "done") { 
+        $doneCount++
+        continue 
+    }
+    
+    $runningCount++
+    Write-Host "────────────────────────────────────" -ForegroundColor Gray
+    Write-Host "任务: $($task.id)" -ForegroundColor White
+    Write-Host "  Agent:  $($task.agent)" -ForegroundColor Cyan
+    Write-Host "  描述:  $($task.description)" -ForegroundColor Gray
+    Write-Host "  分支:  $($task.branch)" -ForegroundColor Gray
+    Write-Host "  状态:  $($task.status)" -ForegroundColor Yellow
+    Write-Host "  开始:  $($task.startTime)" -ForegroundColor Gray
+    
+    # 检查 Agent 是否还在运行
+    $jobs = Get-Job -Name $task.jobName -ErrorAction SilentlyContinue
+    if ($jobs) {
+        $jobInfo = Receive-Job -Job $jobs
+        if ($jobInfo) {
+            Write-Host "  → 运行中，输出: $($jobInfo[-1..-5])" -ForegroundColor Green
         }
-        Write-Host "  [*] 会话运行中"
+    } else {
+        Write-Host "  [!] Agent 作业已结束" -ForegroundColor Red
+        $task.status = "pending_review"
     }
 }
 
-Write-Host "监控完成: $(Get-Date)"
+Write-Host ""
+Write-Host "────────────────────────────────────" -ForegroundColor Gray
+Write-Host "统计: 运行中: $runningCount | 已完成: $doneCount" -ForegroundColor Cyan
+Write-Host "时间: $(Get-Date)" -ForegroundColor Gray
+Write-Host ""
